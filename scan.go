@@ -7,10 +7,15 @@ import (
 	"strings"
 )
 
-// R is used to pass the results of an sql.Query directly to Scan. E.g.
+// RowPasser represents the encapsulated results of an sql.Query. (See
+// R and Scan).
+type RowPasser func() (*sql.Rows, error)
+
+// R encapsulates the results of an sql.Query in a RowPasser, such
+// that are passed inline to Scan. E.g.,
 //
 //   Scan(&dest, R(db.Query(`select "testing"`))
-func R(rows *sql.Rows, err error) func() (*sql.Rows, error) {
+func R(rows *sql.Rows, err error) RowPasser {
 	return func() (*sql.Rows, error) {
 		return rows, err
 	}
@@ -33,7 +38,7 @@ func R(rows *sql.Rows, err error) func() (*sql.Rows, error) {
 //
 // If only a single column is returned by the query, the destination
 // can be a base type (e.g., a string).
-func Scan(dest interface{}, pass func() (*sql.Rows, error)) error {
+func Scan(dest interface{}, pass RowPasser) error {
 	rows, err := pass()
 	if err != nil {
 		return err
