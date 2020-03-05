@@ -16,26 +16,26 @@ insert into A(a, b, c) values
 ('two', 2, 'red'),
 ('three', 3, 'blue')`
 
-type A struct {
+type a struct {
 	A string
 	B int
 	Z string `sql:"c"`
 }
 
-var expect = []A{
-	A{"one", 1, "red"},
-	A{"two", 2, "red"},
-	A{"three", 3, "blue"},
+var expect = []a{
+	a{"one", 1, "red"},
+	a{"two", 2, "red"},
+	a{"three", 3, "blue"},
 }
 
 func TestScan(t *testing.T) {
 	db, err := sql.Open("sqlite3", ":memory:?_fk=1")
-	Panic(err)
+	_panic(err)
 	defer db.Close()
 	_, err = db.Exec(schema)
-	Panic(err)
+	_panic(err)
 	_, err = db.Exec(data)
-	Panic(err)
+	_panic(err)
 
 	t.Run("scan into slice of base type", func(t *testing.T) {
 		dest := make([]string, 0)
@@ -70,7 +70,7 @@ func TestScan(t *testing.T) {
 	})
 
 	t.Run("dest is scalar struct", func(t *testing.T) {
-		var dest A
+		var dest a
 		err := Scan(&dest, R(db.Query(`select * from A limit 1`)))
 		if err != nil {
 			t.Fatalf("scan into scalar struct: %s", err)
@@ -81,7 +81,7 @@ func TestScan(t *testing.T) {
 	})
 
 	t.Run("dest is slice of struct", func(t *testing.T) {
-		var dest []A
+		var dest []a
 		if err := Scan(&dest, R(db.Query(`select * from A`))); err != nil {
 			t.Fatalf("scan into slice of struct: %s", err)
 		}

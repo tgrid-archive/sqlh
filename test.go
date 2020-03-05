@@ -1,6 +1,6 @@
 package sqlh
 
-func Panic(err error) {
+func _panic(err error) {
 	if err != nil {
 		panic(err)
 	}
