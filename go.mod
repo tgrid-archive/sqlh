@@ -1,4 +1,4 @@
-module github.com/jwp873/sqlh
+module github.com/securelogicgroup/sqlh
 
 go 1.13
 
