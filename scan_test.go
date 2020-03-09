@@ -112,4 +112,17 @@ func TestScan(t *testing.T) {
 			t.Fatalf("expected: %#v\ngot: %#v", expect, initial)
 		}
 	})
+
+	t.Run("embedded struct fields can be targetted", func(*testing.T) {
+		type embed struct {
+			A string
+		}
+		var dest struct {
+			embed
+			B int
+		}
+		if err := Scan(&dest, R(db.Query(`select a, b from A limit 1`))); err != nil {
+			t.Fatal(err)
+		}
+	})
 }
