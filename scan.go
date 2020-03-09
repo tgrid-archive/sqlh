@@ -39,6 +39,9 @@ func R(rows *sql.Rows, err error) RowPasser {
 // If only a single column is returned by the query, the destination
 // can be a base type (e.g., a string).
 func Scan(dest interface{}, pass RowPasser) error {
+	atleastOneRow := false
+
+	// Execute the query in RowPasser
 	rows, err := pass()
 	if err != nil {
 		return err
@@ -51,106 +54,79 @@ func Scan(dest interface{}, pass RowPasser) error {
 		return fmt.Errorf("dest is not a pointer type")
 	}
 	v = v.Elem()
+
+	// Get element (row) type
 	t := v.Type()
 	if v.Kind() == reflect.Slice {
 		t = t.Elem()
 	}
-	// v is the writable destination slice or struct
-	// t is the destination element type
 
-	scan := scanStruct
-	if t.Kind() != reflect.Struct {
-		scan = scanBase
-	}
-	result, err := scan(v, t, rows)
+	columns, err := rows.Columns()
 	if err != nil {
 		return err
 	}
-	v.Set(result)
-	return nil
-}
 
-func scanBase(v reflect.Value, t reflect.Type, rows *sql.Rows) (reflect.Value, error) {
-	var null reflect.Value
-	if cols, err := rows.Columns(); err != nil {
-		return null, err
-	} else if len(cols) != 1 {
-		return null, fmt.Errorf("can't scan %d columns into %s", len(cols), t)
-	}
-	result := reflect.MakeSlice(reflect.SliceOf(t), 0, 0)
 	for rows.Next() {
-		elem := reflect.New(t).Elem()
-		if err := rows.Scan(elem.Addr().Interface()); err != nil {
-			return null, err
+		// Choose target for this row. If the destination is a
+		// slice, the target is a new value of the row
+		// type. If the destination is a scalar, the target is
+		// the desination itself.
+		target := v
+		if v.Kind() == reflect.Slice {
+			target = reflect.New(t).Elem()
 		}
-		result = reflect.Append(result, elem)
+
+		// Build an array of receiver pointers which are
+		// passed to rows.Scan. If the destination row type is
+		// a struct, receivers will contain pointers to
+		// appropriate fields within the struct. If it is a
+		// base type, receivers will contain a pointer to the
+		// destination itself.
+		receivers := make([]interface{}, len(columns))
+		if t.Kind() == reflect.Struct {
+			for i, col := range columns {
+				field := target.FieldByNameFunc(func(name string) bool {
+					if field, ok := t.FieldByName(name); ok {
+						if field.Tag.Get("sql") == col {
+							return true
+						}
+					}
+					return strings.ToLower(name) == col
+				})
+				if !field.IsValid() {
+					return fmt.Errorf("no field for column %s", col)
+				}
+				receivers[i] = field.Addr().Interface()
+			}
+		} else if len(columns) != 1 {
+			return fmt.Errorf("can't scan %d columns into %s", len(columns), t)
+		} else {
+			receivers[0] = target.Addr().Interface()
+		}
+
+		// Scan into the target
+		if err := rows.Scan(receivers...); err != nil {
+			return err
+		}
+
+		// If destination was a scalar, we only need the first row
 		if v.Kind() != reflect.Slice {
+			atleastOneRow = true
 			break
 		}
+
+		// If destination was a slice, append the current row
+		v.Set(reflect.Append(v, target))
 	}
+
 	if err := rows.Err(); err != nil {
-		return null, err
-	}
-	if v.Kind() != reflect.Slice {
-		if result.Len() != 1 {
-			return null, sql.ErrNoRows
-		}
-		return result.Index(0), nil
-	}
-	return result, nil
-}
-
-func scanStruct(v reflect.Value, t reflect.Type, rows *sql.Rows) (reflect.Value, error) {
-	var null reflect.Value
-	// Create name -> field number map
-	fields := make(map[string]int)
-	for i := 0; i < t.NumField(); i++ {
-		name, ok := t.Field(i).Tag.Lookup("sql")
-		if !ok {
-			name = strings.ToLower(t.Field(i).Name)
-		}
-		fields[name] = i
+		return err
 	}
 
-	// Build receiver index array
-	cols, err := rows.Columns()
-	if err != nil {
-		return null, fmt.Errorf("error getting column names: %s", err)
-	}
-	receivers := make([]int, len(cols))
-	for i, col := range cols {
-		r, ok := fields[col]
-		if !ok {
-			return null, fmt.Errorf("no suitable field for column %s", col)
-		}
-		receivers[i] = r
+	// If destination was scalar, ensure we got atleast one row
+	if v.Kind() != reflect.Slice && !atleastOneRow {
+		return sql.ErrNoRows
 	}
 
-	result := reflect.MakeSlice(reflect.SliceOf(t), 0, 0)
-	for rows.Next() {
-		elem := reflect.New(t).Elem()
-		r := make([]interface{}, len(receivers))
-		for i := range r {
-			r[i] = elem.Field(receivers[i]).Addr().Interface()
-		}
-		if err := rows.Scan(r...); err != nil {
-			return null, err
-		}
-
-		result = reflect.Append(result, elem)
-
-		if v.Kind() != reflect.Slice {
-			break // We only need 1 row if dest is not a slice
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return null, err
-	}
-	if v.Kind() == reflect.Struct {
-		if result.Len() != 1 {
-			return null, sql.ErrNoRows
-		}
-		return result.Index(0), nil
-	}
-	return result, nil
+	return nil
 }

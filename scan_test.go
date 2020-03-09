@@ -94,10 +94,22 @@ func TestScan(t *testing.T) {
 		var dest struct {
 			A string
 		}
-		test := regexp.MustCompile(`no suitable field for column`)
+		test := regexp.MustCompile(`^no field for column b$`)
 		err := Scan(&dest, R(db.Query(`select * from A`)))
 		if !test.MatchString(err.Error()) {
 			t.Fatalf("expected match for %v, got: %s", test, err)
+		}
+	})
+
+	t.Run("existing unmatched fields left alone", func(t *testing.T) {
+		expect := expect[0]
+		expect.A = "untouched"
+		initial := a{A: "untouched"}
+		if err := Scan(&initial, R(db.Query(`select B, C from A limit 1`))); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(expect, initial) {
+			t.Fatalf("expected: %#v\ngot: %#v", expect, initial)
 		}
 	})
 }
