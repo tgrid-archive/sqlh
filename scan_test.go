@@ -4,17 +4,27 @@ import (
 	"database/sql"
 	"reflect"
 	"regexp"
+	"strings"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const schema = `create table A(a text, b int, c text)`
-const data = `
+const schema = `
+create table A(a text, b int, c text);
+
+create table B(id text, gr text);
+
 insert into A(a, b, c) values
 ('one', 1, 'red'),
 ('two', 2, 'red'),
-('three', 3, 'blue')`
+('three', 3, 'blue');
+
+insert into B(id, gr) values
+('one', 'group1'),
+('two', 'group1'),
+('two', 'group2');
+`
 
 type a struct {
 	A string
@@ -32,10 +42,11 @@ func TestScan(t *testing.T) {
 	db, err := sql.Open("sqlite3", ":memory:?_fk=1")
 	_panic(err)
 	defer db.Close()
-	_, err = db.Exec(schema)
-	_panic(err)
-	_, err = db.Exec(data)
-	_panic(err)
+	for i, v := range strings.Split(schema, ";") {
+		if _, err := db.Exec(v); err != nil {
+			t.Fatalf("exec schema %d: %s:\n%s", i, err, v)
+		}
+	}
 
 	t.Run("scan into slice of base type", func(t *testing.T) {
 		dest := make([]string, 0)
@@ -113,7 +124,7 @@ func TestScan(t *testing.T) {
 		}
 	})
 
-	t.Run("embedded struct fields can be targetted", func(*testing.T) {
+	t.Run("embedded struct fields can be targeted", func(*testing.T) {
 		type embed struct {
 			A string
 		}
@@ -125,13 +136,37 @@ func TestScan(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
+
+	t.Run("aggregate into slice fields", func(t *testing.T) {
+		type d struct {
+			A     string
+			Group []string `sql:"gr"`
+		}
+		expect := []d{
+			d{"one", []string{"group1"}},
+			d{"two", []string{"group1", "group2"}},
+			d{"three", nil},
+		}
+		var dest []d
+		if err := Scan(&dest, R(db.Query(`select a, gr from A left join B on a = id`))); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(expect, dest) {
+			t.Fatalf("expected: %#v\ngot: %#v", expect, dest)
+		}
+	})
 }
 
 func BenchmarkScan(b *testing.B) {
 	db, err := sql.Open("sqlite3", ":memory:?_fk=1")
 	_panic(err)
 	defer db.Close()
-	_, err = db.Exec(schema)
+	for i, v := range strings.Split(schema, ";") {
+		if _, err = db.Exec(v); err != nil {
+			b.Fatalf("exec schema %d: %s", i, err)
+		}
+	}
+	_, err = db.Exec(`delete from A`)
 	_panic(err)
 	for i := 0; i < b.N; i++ {
 		_, err := db.Exec(`insert into A(a,b,c) values(?,?,?)`, "testing", 1, "testing")
