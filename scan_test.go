@@ -126,3 +126,24 @@ func TestScan(t *testing.T) {
 		}
 	})
 }
+
+func BenchmarkScan(b *testing.B) {
+	db, err := sql.Open("sqlite3", ":memory:?_fk=1")
+	_panic(err)
+	defer db.Close()
+	_, err = db.Exec(schema)
+	_panic(err)
+	for i := 0; i < b.N; i++ {
+		_, err := db.Exec(`insert into A(a,b,c) values(?,?,?)`, "testing", 1, "testing")
+		_panic(err)
+	}
+
+	b.ResetTimer()
+
+	var dest []a
+	err = Scan(&dest, R(db.Query(`select * from A`)))
+	_panic(err)
+	if len(dest) != b.N {
+		panic("incorrect number of rows returned")
+	}
+}
