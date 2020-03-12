@@ -41,16 +41,16 @@ insert into Z values(null, null, null, null, null, null),('test', 'test', 1, 1, 
 	}
 
 	t.Run("update with only zero values fails", func(t *testing.T) {
-		_, err := Update(db, "Z").Set(update{}).Where("rowid = 1")
+		_, err := Update("Z").Set(update{}).Where("rowid = 1").Exec(db)
 		if err == nil {
 			t.Fatal("expected error")
 		}
 	})
 
 	t.Run(`sql:"-" tag ignored`, func(t *testing.T) {
-		u := Update(db, "Z").Set(update{Z: "test"})
-		if len(u.values) != 0 {
-			t.Fatalf("expected empty set, got: %#v", u.values)
+		u := Update("Z").Set(update{Z: "test"})
+		if len(u.args) != 0 {
+			t.Fatalf("expected empty set, got: %#v", u.args)
 		}
 	})
 
@@ -68,14 +68,14 @@ insert into Z values(null, null, null, null, null, null),('test', 'test', 1, 1, 
 
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			u := Update(db, "Z").Set(tt.u)
+			u := Update("Z").Set(tt.u)
 			if tt.set != u.set {
 				t.Fatalf("test %d: expected %#v, got: %#v", i, tt.set, u.set)
 			}
-			if !reflect.DeepEqual(tt.vals, u.values) {
-				t.Fatalf("test %d: expected %#v, got: %#v", i, tt.vals, u.values)
+			if !reflect.DeepEqual(tt.vals, u.args) {
+				t.Fatalf("test %d: expected %#v, got: %#v", i, tt.vals, u.args)
 			}
-			if res, err := u.Where("rowid = 1"); err != nil {
+			if res, err := u.Where("rowid = 1").Exec(db); err != nil {
 				t.Fatalf("exec: %s", err)
 			} else if n, err := res.RowsAffected(); err != nil {
 				t.Fatalf("get row count: %s", err)

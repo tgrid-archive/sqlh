@@ -16,7 +16,6 @@ type Executor interface {
 // Set() method to be called, supplying a struct containing fields to
 // update.
 type UpdatePendingSet struct {
-	db    Executor
 	table string
 }
 
@@ -24,24 +23,33 @@ type UpdatePendingSet struct {
 // WHERE condition to be supplied via its' Where() method.
 type UpdatePendingWhere struct {
 	UpdatePendingSet
-	set    string
-	values []interface{}
-	err    error
+	set  string
+	args []interface{}
+	err  error
+}
+
+// PendingUpdate is an UPDATE query which is ready to execute. Its'
+// statement and arguments can be inspected with its' Statement() and
+// Args() methods.
+type PendingUpdate struct {
+	UpdatePendingWhere
+	where     string
+	whereArgs []interface{}
 }
 
 // Update is used to begin constructing a SQL UPDATE query. It takes a
-// database and a table name. Method calls on the result allow the
-// query to be finalized and executed.
+// a target table name. Method calls on the result allow the query to
+// be finalized and executed.
 //
 //   type row struct{
 //       Id int
 //       Name string
 //   }
-//   res, err := Update(db, "X").Set(row{Name: "updated"}).Where("Id = ?", 1)
+//   res, err := Update("X").Set(row{Name: "updated"}).Where("Id = ?", 1).Exec(db)
 //
 // Zero-values in the struct passed to Set() are ignored.
-func Update(db Executor, table string) UpdatePendingSet {
-	return UpdatePendingSet{db, table}
+func Update(table string) UpdatePendingSet {
+	return UpdatePendingSet{table}
 }
 
 // Set allows a struct containing updated field/column values to be
@@ -83,18 +91,29 @@ func (u UpdatePendingSet) Set(update interface{}) UpdatePendingWhere {
 	return UpdatePendingWhere{
 		UpdatePendingSet: u,
 		set:              strings.Join(set, ", "),
-		values:           vals,
+		args:             vals,
 	}
 }
 
 // Where allows a WHERE condition to be added to a pending UPDATE
 // query. It also executes the query and returns the results.
-func (u UpdatePendingWhere) Where(where string, args ...interface{}) (sql.Result, error) {
-	if u.err != nil {
-		return nil, u.err
+func (u UpdatePendingWhere) Where(where string, args ...interface{}) PendingUpdate {
+	p := PendingUpdate{
+		UpdatePendingWhere: u,
+		where:              where,
 	}
-	args = append(u.values, args...)
-	query := fmt.Sprintf("UPDATE %s SET %s WHERE %s", u.table, u.set, where)
+	p.args = append(p.args, args...)
+	return p
+}
 
-	return u.db.Exec(query, args...)
+func (p PendingUpdate) Statement() string {
+	return fmt.Sprintf("UPDATE %s SET %s WHERE %s", p.table, p.set, p.where)
+}
+
+func (p PendingUpdate) Args() []interface{} {
+	return p.args
+}
+
+func (p PendingUpdate) Exec(db Executor) (sql.Result, error) {
+	return db.Exec(p.Statement(), p.Args()...)
 }
