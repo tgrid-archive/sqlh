@@ -7,31 +7,30 @@ import (
 	"strings"
 )
 
-// RowPasser represents the encapsulated results of an sql.Query. (See
-// R and Scan).
-type RowPasser func() (*sql.Rows, error)
+// Querist is the minimal set of function needed from an *sql.DB.
+type Querist interface {
+	Query(query string, args ...interface{}) (*sql.Rows, error)
+}
 
-// R encapsulates the results of an sql.Query in a RowPasser, such
-// that are passed inline to Scan. E.g.,
-//
-//   Scan(&dest, R(db.Query(`select "testing"`))
-func R(rows *sql.Rows, err error) RowPasser {
-	return func() (*sql.Rows, error) {
-		return rows, err
-	}
+// PendingScan is a SELECT statement which is ready for execution via
+// its' Query method.
+type PendingScan struct {
+	dest  interface{}
+	query string
+	args  []interface{}
 }
 
 // Scan is a short-hand for scanning a set of rows into a slice,
 // or a single row into a scalar. Example:
 //
 //   var dest struct{A, B string}
-//   _ = Scan(&dest, R(db.Query(`select a, b from C`)))
+//   _ = Scan(&dest, `select a, b from C`).Query(db)
 //   var dest2 struct{A, B string}
-//   _ = Scan(&dest2, R(db.Query(`select a, b from C limit 1`)))
+//   _ = Scan(&dest2, `select a, b from C limit 1`).Query(db)
 //   var dest3 []int
-//   _ = Scan(&dest3, R(db.Query(`select a from C`)))
+//   _ = Scan(&dest3, `select a from C`).Query(db)
 //   var dest4 int
-//   _ = Scan(&dest4, R(db.Query(`select a from C limit 1`)))
+//   _ = Scan(&dest4, `select a from C limit 1`).Query(db)
 //
 // Scan will match columns to struct fields based on the lower-cased
 // name, or an `sql:""` struct tag (which takes precedence).
@@ -45,20 +44,28 @@ func R(rows *sql.Rows, err error) RowPasser {
 // corresponsing column.
 //
 //  var dest struct{A string, B []string}
-//  _ = Scan(&dest, R(db.Query(`select a, b from C`)))
+//  _ = Scan(&dest, `select a, b from C`).Query(db)
 //  // => [{"red", ["one", "two"]}, {"blue", ["three", "four", "five"]}]
-func Scan(dest interface{}, pass RowPasser) error {
+func Scan(dest interface{}, query string, args ...interface{}) PendingScan {
+	return PendingScan{
+		dest:  dest,
+		query: query,
+		args:  args,
+	}
+}
+
+// Query runs the pending SELECT statement against the given database.
+func (p PendingScan) Query(db Querist) error {
 	atleastOneRow := false
 
-	// Execute the query in RowPasser
-	rows, err := pass()
+	rows, err := db.Query(p.query, p.args...)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 
 	// Ensure dest is a pointer
-	v := reflect.ValueOf(dest)
+	v := reflect.ValueOf(p.dest)
 	if v.Kind() != reflect.Ptr {
 		return fmt.Errorf("dest is not a pointer type")
 	}
