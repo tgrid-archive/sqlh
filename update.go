@@ -124,5 +124,8 @@ func (p PendingUpdate) Args() []interface{} {
 }
 
 func (p PendingUpdate) Exec(db Executor) (sql.Result, error) {
+	if p.err != nil {
+		return nil, p.err
+	}
 	return db.Exec(p.Statement(), p.Args()...)
 }

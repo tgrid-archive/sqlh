@@ -138,5 +138,8 @@ func (r PendingInsert) Args() []interface{} {
 //   insert := Insert("X", values)
 //   rows, err := db.Exec(insert.Statement(), insert.Args())
 func (i PendingInsert) Exec(db Executor) (sql.Result, error) {
+	if i.err != nil {
+		return nil, i.err
+	}
 	return db.Exec(i.Statement(), i.Args()...)
 }

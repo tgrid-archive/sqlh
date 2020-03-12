@@ -3,6 +3,7 @@ package sqlh
 import (
 	"database/sql"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -46,9 +47,14 @@ insert into Z values(null, null, null, null, null, null),('test', 'test', 1, 1, 
 	}
 
 	t.Run("update with only zero values fails", func(t *testing.T) {
-		_, err := Update("Z").Set(update{}).Where("rowid = 1").Exec(db)
-		if err == nil {
-			t.Fatal("expected error")
+		update := Update("Z").Set(update{}).Where("rowid = 1")
+		if len(update.set) != 0 {
+			t.Fatalf("expected 0 columns to set, got: %#v", update.set)
+		}
+		match := regexp.MustCompile(`^no fields to update$`)
+		_, err := update.Exec(db)
+		if !match.MatchString(err.Error()) {
+			t.Fatalf("expected error matching %v, got: %s", match, err)
 		}
 	})
 
