@@ -80,7 +80,8 @@ func Insert(table string, values interface{}) PendingInsert {
 			if tag, ok := field.Tag.Lookup("sql"); ok {
 				name = tag
 			}
-			if name == "-" {
+			// Ignore - tag, or unexported
+			if name == "-" || field.PkgPath != "" {
 				continue
 			}
 			columns = append(columns, name)

@@ -69,21 +69,30 @@ func (u UpdatePendingSet) Set(update interface{}) UpdatePendingWhere {
 	}
 	var set []string
 	var vals []interface{}
-	for i := 0; i < v.NumField(); i++ {
-		field := v.Field(i)
-		if field.IsZero() {
-			continue
+
+	var recurseFields func(t reflect.Type, index []int)
+	recurseFields = func(t reflect.Type, index []int) {
+		for i := 0; i < t.NumField(); i++ {
+			field := t.Field(i)
+			if field.Anonymous {
+				recurseFields(field.Type, append(index, field.Index...))
+				continue
+			}
+			name := strings.ToLower(field.Name)
+			if tag, ok := field.Tag.Lookup("sql"); ok {
+				name = tag
+			}
+			value := v.FieldByIndex(append(index, field.Index...))
+			// Ignore - tag, unexported, or zero value
+			if name == "-" || field.PkgPath != "" || value.IsZero() {
+				continue
+			}
+			set = append(set, name+" = ?")
+			vals = append(vals, value.Interface())
 		}
-		name, ok := v.Type().Field(i).Tag.Lookup("sql")
-		if !ok {
-			name = strings.ToLower(v.Type().Field(i).Name)
-		}
-		if name == "-" {
-			continue
-		}
-		set = append(set, name+" = ?")
-		vals = append(vals, field.Interface())
 	}
+	recurseFields(v.Type(), []int{})
+
 	if len(set) < 1 {
 		return err("no fields to update")
 	}

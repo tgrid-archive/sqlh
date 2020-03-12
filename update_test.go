@@ -9,14 +9,19 @@ import (
 
 func TestUpdate(t *testing.T) {
 
-	type update struct {
+	type e struct {
 		A string
 		B *string
+	}
+
+	type update struct {
+		e
 		C int
 		D *int
 		E bool
 		F *bool
-		Z string `sql:"-"`
+		y string // Should be ignored
+		Z string `sql:"-"` // Should be ignored
 	}
 
 	type test struct {
@@ -54,12 +59,19 @@ insert into Z values(null, null, null, null, null, null),('test', 'test', 1, 1, 
 		}
 	})
 
+	t.Run("unexported field ignored", func(t *testing.T) {
+		u := Update("Z").Set(update{y: "test"})
+		if len(u.args) != 0 {
+			t.Fatalf("expected empty set, got: %#v", u.args)
+		}
+	})
+
 	sp := "test string pointer"
 	ip := 999
 	bp := false
 	tests := []test{
-		test{"update w/ string", update{A: "x"}, "a = ?", []interface{}{"x"}},
-		test{"update w/ *string", update{B: &sp}, "b = ?", []interface{}{&sp}},
+		test{"update w/ string", update{e: e{A: "x"}}, "a = ?", []interface{}{"x"}},
+		test{"update w/ *string", update{e: e{B: &sp}}, "b = ?", []interface{}{&sp}},
 		test{"update w/ int", update{C: 1}, "c = ?", []interface{}{1}},
 		test{"update w/ *int", update{D: &ip}, "d = ?", []interface{}{&ip}},
 		test{"update w/ bool", update{E: true}, "e = ?", []interface{}{true}},

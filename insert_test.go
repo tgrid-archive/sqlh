@@ -15,15 +15,16 @@ func TestInsert(t *testing.T) {
 	type row struct {
 		e
 		B string
-		Z string `sql:"-"`
+		y string // Should be ignored
+		Z string `sql:"-"` // Should be ignored
 	}
 
 	schema := `create table X(a int, b string)`
 
 	rows := []row{
-		row{e{1}, "testing", "ignored"},
-		row{e{2}, "testing", "ignored"},
-		row{e{3}, "testing", "ignored"},
+		row{e{1}, "testing", "ignored", ""},
+		row{e{2}, "testing", "ignored", ""},
+		row{e{3}, "testing", "ignored", ""},
 	}
 
 	// Build up expected statement and values for insert
@@ -106,4 +107,5 @@ func TestInsert(t *testing.T) {
 			t.Fatalf("expected %d rows, got %d", len(rows), n)
 		}
 	})
+
 }
