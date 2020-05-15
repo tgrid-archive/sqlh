@@ -11,23 +11,23 @@ import (
 func TestUpdate(t *testing.T) {
 
 	type e struct {
-		A string
-		B *string
+		A string  `sql:"a"`
+		B *string `sql:"b"`
 	}
 
-	type update struct {
+	type up struct {
 		e
-		C int
-		D *int
-		E bool
-		F *bool
+		C int    `sql:"c"`
+		D *int   `sql:"d"`
+		E bool   `sql:"e"`
+		F *bool  `sql:"f"`
 		y string // Should be ignored
 		Z string `sql:"-"` // Should be ignored
 	}
 
 	type test struct {
 		name string
-		u    update
+		u    up
 		set  string
 		vals []interface{}
 	}
@@ -46,29 +46,26 @@ insert into Z values(null, null, null, null, null, null),('test', 'test', 1, 1, 
 		}
 	}
 
+	match := regexp.MustCompile(`^no fields to update$`)
+
 	t.Run("update with only zero values fails", func(t *testing.T) {
-		update := Update("Z").Set(update{}).Where("rowid = 1")
-		if len(update.set) != 0 {
-			t.Fatalf("expected 0 columns to set, got: %#v", update.set)
-		}
-		match := regexp.MustCompile(`^no fields to update$`)
-		_, err := update.Exec(db)
+		_, err := Update(db, "Z", up{}, "rowid = 1")
 		if !match.MatchString(err.Error()) {
 			t.Fatalf("expected error matching %v, got: %s", match, err)
 		}
 	})
 
 	t.Run(`sql:"-" tag ignored`, func(t *testing.T) {
-		u := Update("Z").Set(update{Z: "test"})
-		if len(u.args) != 0 {
-			t.Fatalf("expected empty set, got: %#v", u.args)
+		_, err := update("Z", up{Z: "test"}, "skdjfsd")
+		if !match.MatchString(err.Error()) {
+			t.Fatalf("expected error matching %v, got: %s", match, err)
 		}
 	})
 
 	t.Run("unexported field ignored", func(t *testing.T) {
-		u := Update("Z").Set(update{y: "test"})
-		if len(u.args) != 0 {
-			t.Fatalf("expected empty set, got: %#v", u.args)
+		_, err := update("Z", up{y: "test"}, "fsfds")
+		if !match.MatchString(err.Error()) {
+			t.Fatalf("expected error matching %v, got: %s", match, err)
 		}
 	})
 
@@ -76,24 +73,27 @@ insert into Z values(null, null, null, null, null, null),('test', 'test', 1, 1, 
 	ip := 999
 	bp := false
 	tests := []test{
-		test{"update w/ string", update{e: e{A: "x"}}, "a = ?", []interface{}{"x"}},
-		test{"update w/ *string", update{e: e{B: &sp}}, "b = ?", []interface{}{&sp}},
-		test{"update w/ int", update{C: 1}, "c = ?", []interface{}{1}},
-		test{"update w/ *int", update{D: &ip}, "d = ?", []interface{}{&ip}},
-		test{"update w/ bool", update{E: true}, "e = ?", []interface{}{true}},
-		test{"update w/ *bool", update{F: &bp}, "f = ?", []interface{}{&bp}},
+		{"update w/ string", up{e: e{A: "x"}}, "a = ?", []interface{}{"x"}},
+		{"update w/ *string", up{e: e{B: &sp}}, "b = ?", []interface{}{&sp}},
+		{"update w/ int", up{C: 1}, "c = ?", []interface{}{1}},
+		{"update w/ *int", up{D: &ip}, "d = ?", []interface{}{&ip}},
+		{"update w/ bool", up{E: true}, "e = ?", []interface{}{true}},
+		{"update w/ *bool", up{F: &bp}, "f = ?", []interface{}{&bp}},
 	}
 
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			u := Update("Z").Set(tt.u)
+			u, err := update("Z", tt.u, "rowid = 1")
+			if err != nil {
+				t.Fatal(err)
+			}
 			if tt.set != u.set {
 				t.Fatalf("test %d: expected %#v, got: %#v", i, tt.set, u.set)
 			}
 			if !reflect.DeepEqual(tt.vals, u.args) {
 				t.Fatalf("test %d: expected %#v, got: %#v", i, tt.vals, u.args)
 			}
-			if res, err := u.Where("rowid = 1").Exec(db); err != nil {
+			if res, err := db.Exec(u.statement, append(u.args, u.whereArgs...)...); err != nil {
 				t.Fatalf("exec: %s", err)
 			} else if n, err := res.RowsAffected(); err != nil {
 				t.Fatalf("get row count: %s", err)
@@ -116,14 +116,14 @@ func TestUpdateExplicitIgnore(t *testing.T) {
 		ID int64  `sql:"id/update"`
 		A  string `sql:"a"`
 	}{999, "999"}
-	if _, err := Insert("T", x).Exec(db); err != nil {
+	if _, err := Insert(db, "T", x); err != nil {
 		t.Fatal(err)
 	}
 	x.ID = 2
-	if _, err := Update("T").Set(x).Where("id = 999").Exec(db); err != nil {
+	if _, err := Update(db, "T", x, "id = 999"); err != nil {
 		t.Fatal(err)
 	}
-	if err := Scan(&x, "select * from T").Query(db); err != nil {
+	if err := Scan(&x, db, "select * from T"); err != nil {
 		t.Fatal(err)
 	}
 	if x.ID != 999 {

@@ -28,7 +28,6 @@ func TestInsert(t *testing.T) {
 	}
 
 	// Build up expected statement and values for insert
-	columns := []string{"a", "b"}
 	statement := `insert into X(a, b) values`
 	values := make([]interface{}, 0)
 	sep := ""
@@ -47,12 +46,13 @@ func TestInsert(t *testing.T) {
 	}
 
 	t.Run("insert scalar", func(t *testing.T) {
-		x := Insert("X", rows[0])
-		if x.err != nil {
-			t.Fatal(x.err)
+		x, err := insert("X", rows[0])
+		if err != nil {
+			t.Fatal(err)
 		}
-		if !reflect.DeepEqual(columns, x.columns) {
-			t.Fatalf("expected: %#v, got: %#v", columns, x.columns)
+		statement := `insert into X(a, b) values(?, ?)`
+		if statement != x.statement {
+			t.Fatalf("expected: %#v, got: %#v", statement, x.statement)
 		}
 		if len(x.args) != 2 {
 			t.Fatalf("expected 2 values, got: %d", len(x.args))
@@ -63,12 +63,12 @@ func TestInsert(t *testing.T) {
 	})
 
 	t.Run("insert slice", func(t *testing.T) {
-		x := Insert("X", rows)
-		if x.err != nil {
-			t.Fatal(x.err)
+		x, err := insert("X", rows)
+		if err != nil {
+			t.Fatal(err)
 		}
-		if !reflect.DeepEqual(columns, x.columns) {
-			t.Fatalf("expected: %#v, got: %#v", columns, x.columns)
+		if statement != x.statement {
+			t.Fatalf("expected: %#v, got: %#v", statement, x.statement)
 		}
 		if len(x.args) != len(rows)*2 {
 			t.Fatalf("expected %d values, got: %d", len(rows)*2, len(x.args))
@@ -79,20 +79,20 @@ func TestInsert(t *testing.T) {
 	})
 
 	t.Run("view SQL statement and values before exec", func(t *testing.T) {
-		x := Insert("X", rows)
-		if x.err != nil {
-			t.Fatal(x.err)
+		x, err := insert("X", rows)
+		if err != nil {
+			t.Fatal(err)
 		}
-		if x.Statement() != statement {
-			t.Fatalf("expected %#v, got: %#v", statement, x.Statement())
+		if x.statement != statement {
+			t.Fatalf("expected %#v, got: %#v", statement, x.statement)
 		}
-		if !reflect.DeepEqual(x.Args(), values) {
-			t.Fatalf("expected %#v, got: %#v", values, x.Args())
+		if !reflect.DeepEqual(x.args, values) {
+			t.Fatalf("expected %#v, got: %#v", values, x.args)
 		}
 	})
 
 	t.Run("exec successful", func(t *testing.T) {
-		if _, err := Insert("X", rows).Exec(db); err != nil {
+		if _, err := Insert(db, "X", rows); err != nil {
 			t.Fatal(err)
 		}
 		r, err := db.Query(`select * from X`)
@@ -122,10 +122,10 @@ func TestInsertExplicitIgnore(t *testing.T) {
 		ID int64  `sql:"id/insert"`
 		A  string `sql:"a"`
 	}{999, "999"}
-	if _, err := Insert("T", x).Exec(db); err != nil {
+	if _, err := Insert(db, "T", x); err != nil {
 		t.Fatal(err)
 	}
-	if err := Scan(&x, "select * from T").Query(db); err != nil {
+	if err := Scan(&x, db, "select * from T"); err != nil {
 		t.Fatal(err)
 	}
 	if x.ID != 1 {

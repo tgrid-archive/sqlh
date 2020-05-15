@@ -51,7 +51,7 @@ func TestScan(t *testing.T) {
 	t.Run("scan into slice of base type", func(t *testing.T) {
 		dest := make([]string, 0)
 
-		if err := Scan(&dest, `select a from A`).Query(db); err != nil {
+		if err := Scan(&dest, db, `select a from A`); err != nil {
 			t.Fatalf("scan into base slice: %s", err)
 		}
 		for i := range expect {
@@ -63,7 +63,7 @@ func TestScan(t *testing.T) {
 
 	t.Run("scan into scalar base type", func(t *testing.T) {
 		var dest string
-		err := Scan(&dest, `select a from A limit 1`).Query(db)
+		err := Scan(&dest, db, `select a from A limit 1`)
 		if err != nil {
 			t.Fatalf("scanning into scalar base type: %s", err)
 		}
@@ -75,7 +75,7 @@ func TestScan(t *testing.T) {
 	t.Run("multiple columns into scalar should fail", func(t *testing.T) {
 		var dest string
 		test := regexp.MustCompile(`can't scan [0-9]+ columns into.*`)
-		err := Scan(&dest, `select * from A limit 1`).Query(db)
+		err := Scan(&dest, db, `select * from A limit 1`)
 		if !test.MatchString(err.Error()) {
 			t.Fatalf("expected match for %v, got: %s", test, err)
 		}
@@ -83,7 +83,7 @@ func TestScan(t *testing.T) {
 
 	t.Run("dest is scalar struct", func(t *testing.T) {
 		var dest a
-		err := Scan(&dest, `select * from A limit 1`).Query(db)
+		err := Scan(&dest, db, `select * from A limit 1`)
 		if err != nil {
 			t.Fatalf("scan into scalar struct: %s", err)
 		}
@@ -94,7 +94,7 @@ func TestScan(t *testing.T) {
 
 	t.Run("dest is slice of struct", func(t *testing.T) {
 		var dest []a
-		if err := Scan(&dest, `select * from A`).Query(db); err != nil {
+		if err := Scan(&dest, db, `select * from A`); err != nil {
 			t.Fatalf("scan into slice of struct: %s", err)
 		}
 		if !reflect.DeepEqual(expect, dest) {
@@ -107,7 +107,7 @@ func TestScan(t *testing.T) {
 			A string `sql:"a"`
 		}
 		test := regexp.MustCompile(`^no field for column b$`)
-		err := Scan(&dest, `select * from A`).Query(db)
+		err := Scan(&dest, db, `select * from A`)
 		if !test.MatchString(err.Error()) {
 			t.Fatalf("expected match for %v, got: %s", test, err)
 		}
@@ -117,7 +117,7 @@ func TestScan(t *testing.T) {
 		expect := expect[0]
 		expect.A = "untouched"
 		initial := a{A: "untouched"}
-		if err := Scan(&initial, `select B, C from A limit 1`).Query(db); err != nil {
+		if err := Scan(&initial, db, `select B, C from A limit 1`); err != nil {
 			t.Fatal(err)
 		}
 		if !reflect.DeepEqual(expect, initial) {
@@ -133,7 +133,7 @@ func TestScan(t *testing.T) {
 			embed
 			B int `sql:"b/update/insert"`
 		}
-		if err := Scan(&dest, `select a, b from A limit 1`).Query(db); err != nil {
+		if err := Scan(&dest, db, `select a, b from A limit 1`); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -149,7 +149,7 @@ func TestScan(t *testing.T) {
 			{"three", nil},
 		}
 		var dest []d
-		if err := Scan(&dest, `select a, gr from A left join B on a = id`).Query(db); err != nil {
+		if err := Scan(&dest, db, `select a, gr from A left join B on a = id`); err != nil {
 			t.Fatal(err)
 		}
 		if !reflect.DeepEqual(expect, dest) {
@@ -177,7 +177,7 @@ func BenchmarkScan(b *testing.B) {
 	b.ResetTimer()
 
 	var dest []a
-	err = Scan(&dest, `select * from A`).Query(db)
+	err = Scan(&dest, db, `select * from A`)
 	_panic(err)
 	if len(dest) != b.N {
 		panic("incorrect number of rows returned")

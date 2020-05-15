@@ -13,28 +13,17 @@ type Querist interface {
 	Query(query string, args ...interface{}) (*sql.Rows, error)
 }
 
-// PendingScan is a SELECT statement which is ready for execution via
-// its' Query method.
-type PendingScan struct {
-	dest  interface{}
-	query string
-	args  []interface{}
-}
-
 // Scan is a short-hand for scanning a set of rows into a slice,
 // or a single row into a scalar. Example:
 //
 //   var dest struct{A, B string}
-//   _ = Scan(&dest, `select a, b from C`).Query(db)
+//   _ = Scan(&dest, db, `select a, b from C`)
 //   var dest2 struct{A, B string}
-//   _ = Scan(&dest2, `select a, b from C limit 1`).Query(db)
+//   _ = Scan(&dest2, db, `select a, b from C limit 1`)
 //   var dest3 []int
-//   _ = Scan(&dest3, `select a from C`).Query(db)
+//   _ = Scan(&dest3, db, `select a from C`)
 //   var dest4 int
-//   _ = Scan(&dest4, `select a from C limit 1`).Query(db)
-//
-// Scan will match columns to struct fields based on the lower-cased
-// name, or an `sql:""` struct tag (which takes precedence).
+//   _ = Scan(&dest4, db, `select a from C limit 1`)
 //
 // If only a single column is returned by the query, the destination
 // can be a base type (e.g., a string).
@@ -44,29 +33,20 @@ type PendingScan struct {
 // the slice fields will contain an aggregate of values from the
 // corresponsing column.
 //
-//  var dest struct{A string, B []string}
-//  _ = Scan(&dest, `select a, b from C`).Query(db)
-//  // => [{"red", ["one", "two"]}, {"blue", ["three", "four", "five"]}]
-func Scan(dest interface{}, query string, args ...interface{}) PendingScan {
-	return PendingScan{
-		dest:  dest,
-		query: query,
-		args:  args,
-	}
-}
-
-// Query runs the pending SELECT statement against the given database.
-func (p PendingScan) Query(db Querist) error {
+//   var dest struct{A string, B []string}
+//   _ = Scan(&dest, db, `select a, b from C`)
+//   // => [{"red", ["one", "two"]}, {"blue", ["three", "four", "five"]}]
+func Scan(dest interface{}, db Querist, query string, args ...interface{}) error {
 	atleastOneRow := false
 
-	rows, err := db.Query(p.query, p.args...)
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 
 	// Ensure dest is a pointer
-	v := reflect.ValueOf(p.dest)
+	v := reflect.ValueOf(dest)
 	if v.Kind() != reflect.Ptr {
 		return fmt.Errorf("dest is not a pointer type")
 	}

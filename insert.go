@@ -7,34 +7,31 @@ import (
 	"strings"
 )
 
-// PendingInsert represents an INSERT query which is ready for
-// execution via its' Exec method.
-type PendingInsert struct {
-	columns []string
-	args    []interface{}
-	table   string
-	err     error
-}
-
-// Insert created a pending INSERT query given a table name and set of
+// Insert runs an INSERT query given a db, table name, and set of
 // values to insert.
 //
 //   type val struct {
 //     A int `sql:"id"`
-//     B string
+//     B string `sql:"b"`
 //   }
-//   values := []val{val{1, "test"}, val{2, "test"}}
+//   values := []val{{1, "test"}, {2, "test"}}
 //
-//   insert := Insert("X", values)
-//   insert.Statement() // => `insert into X(id, b) values(?, ?), (?, ?)`
-//   insert.Args() // => []interface{}{1, "test", 2, "test"}
-//   insert.Exec(db) // Execute the INSERT statement
-//
-//   res, err := Insert("X", values).Exec(db) // Shorthand
-func Insert(table string, values interface{}) PendingInsert {
-	err := func(format string, args ...interface{}) PendingInsert {
-		return PendingInsert{err: fmt.Errorf(format, args...)}
+//   res, err := Insert(db, "X", values)
+//   // = db.Exec(`insert into X(id, b) values(?, ?), (?, ?)`, 1, "test", 2, "test")
+func Insert(db Executor, table string, values interface{}) (sql.Result, error) {
+	i, err := insert(table, values)
+	if err != nil {
+		return nil, err
 	}
+	return db.Exec(i.statement, i.args...)
+}
+
+type preInsert struct {
+	statement string
+	args      []interface{}
+}
+
+func insert(table string, values interface{}) (*preInsert, error) {
 	var vs []reflect.Value
 
 	switch k := reflect.ValueOf(values).Kind(); k {
@@ -45,21 +42,21 @@ func Insert(table string, values interface{}) PendingInsert {
 		for i := 0; i < v.Len(); i++ {
 			w := v.Index(i)
 			if w.Kind() != reflect.Struct {
-				return err("values must be struct or []struct, not: %v", k)
+				return nil, fmt.Errorf("values must be struct or []struct, not: %v", k)
 			}
 			vs = append(vs, w)
 		}
 	default:
-		return err("values must be struct or []struct, not: %v", k)
+		return nil, fmt.Errorf("values must be struct or []struct, not: %v", k)
 	}
 
 	if len(vs) < 1 {
-		return err("no values given")
+		return nil, fmt.Errorf("no values given")
 	}
 
 	for _, v := range vs {
 		if vs[0].Type() != v.Type() {
-			return err("type mismatch: %v and %v", vs[0].Type(), v.Type())
+			return nil, fmt.Errorf("type mismatch: %v and %v", vs[0].Type(), v.Type())
 		}
 	}
 
@@ -91,7 +88,7 @@ func Insert(table string, values interface{}) PendingInsert {
 	recurseFields(vs[0].Type(), []int{})
 
 	if len(columns) < 1 {
-		return err("no columns available for insert")
+		return nil, fmt.Errorf("no columns available for insert")
 	}
 
 	// Build set of arguments for statement
@@ -104,42 +101,14 @@ func Insert(table string, values interface{}) PendingInsert {
 		}
 	}
 
-	return PendingInsert{
-		columns: columns,
-		args:    argset,
-		table:   table,
-	}
-}
-
-// Statement returns the SQL statement which will be exected when Exec
-// is called on the pending INSERT query.
-func (i PendingInsert) Statement() string {
-	placeholders := repeat("?", ", ", len(i.columns))
+	placeholders := repeat("?", ", ", len(columns))
 	value := "(" + placeholders + ")"
-	values := repeat(value, ", ", len(i.args)/len(i.columns))
-	columns := strings.Join(i.columns, ", ")
-	statement := fmt.Sprintf("insert into %s(%s) values%s", i.table, columns, values)
-	return statement
-}
+	valueList := repeat(value, ", ", len(argset)/len(columns))
+	columnList := strings.Join(columns, ", ")
+	statement := fmt.Sprintf("insert into %s(%s) values%s", table, columnList, valueList)
 
-// Args returns the array of arguments which will be passed when Exec
-// is called on the pending INSERT query.
-func (i PendingInsert) Args() []interface{} {
-	return i.args
-}
-
-// Exec will execute the pending INSERT query against the given
-// database or transaction.
-//
-//   res, err := Insert("X", values).Exec(db)
-//
-// It is shorthand for the following:
-//
-//   insert := Insert("X", values)
-//   rows, err := db.Exec(insert.Statement(), insert.Args())
-func (i PendingInsert) Exec(db Executor) (sql.Result, error) {
-	if i.err != nil {
-		return nil, i.err
-	}
-	return db.Exec(i.Statement(), i.Args()...)
+	return &preInsert{
+		statement: statement,
+		args:      argset,
+	}, nil
 }
