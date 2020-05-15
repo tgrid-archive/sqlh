@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// PensingInsert represents an INSERT query which is ready for
+// PendingInsert represents an INSERT query which is ready for
 // execution via its' Exec method.
 type PendingInsert struct {
 	columns []string
@@ -76,13 +76,13 @@ func Insert(table string, values interface{}) PendingInsert {
 				recurseFields(field.Type, append(index, field.Index...))
 				continue
 			}
-			name := strings.ToLower(field.Name)
-			if tag, ok := field.Tag.Lookup("sql"); ok {
-				name = tag
+			tag, ok := field.Tag.Lookup("sql")
+			if !ok {
+				continue // Ignore untagged
 			}
-			// Ignore - tag, or unexported
-			if name == "-" || field.PkgPath != "" {
-				continue
+			name, ignore := parseTag(tag, "insert")
+			if ignore {
+				continue // Explicitly ignored
 			}
 			columns = append(columns, name)
 			columnIdx = append(columnIdx, append(index, field.Index...))
@@ -113,19 +113,19 @@ func Insert(table string, values interface{}) PendingInsert {
 
 // Statement returns the SQL statement which will be exected when Exec
 // is called on the pending INSERT query.
-func (r PendingInsert) Statement() string {
-	placeholders := repeat("?", ", ", len(r.columns))
+func (i PendingInsert) Statement() string {
+	placeholders := repeat("?", ", ", len(i.columns))
 	value := "(" + placeholders + ")"
-	values := repeat(value, ", ", len(r.args)/len(r.columns))
-	columns := strings.Join(r.columns, ", ")
-	statement := fmt.Sprintf("insert into %s(%s) values%s", r.table, columns, values)
+	values := repeat(value, ", ", len(i.args)/len(i.columns))
+	columns := strings.Join(i.columns, ", ")
+	statement := fmt.Sprintf("insert into %s(%s) values%s", i.table, columns, values)
 	return statement
 }
 
 // Args returns the array of arguments which will be passed when Exec
 // is called on the pending INSERT query.
-func (r PendingInsert) Args() []interface{} {
-	return r.args
+func (i PendingInsert) Args() []interface{} {
+	return i.args
 }
 
 // Exec will execute the pending INSERT query against the given

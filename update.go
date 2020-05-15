@@ -78,14 +78,17 @@ func (u UpdatePendingSet) Set(update interface{}) UpdatePendingWhere {
 				recurseFields(field.Type, append(index, field.Index...))
 				continue
 			}
-			name := strings.ToLower(field.Name)
-			if tag, ok := field.Tag.Lookup("sql"); ok {
-				name = tag
+			tag, ok := field.Tag.Lookup("sql")
+			if !ok {
+				continue // Ignore untagged
+			}
+			name, ignore := parseTag(tag, "update")
+			if ignore {
+				continue // Explicitly ignored
 			}
 			value := v.FieldByIndex(append(index, field.Index...))
-			// Ignore - tag, unexported, or zero value
-			if name == "-" || field.PkgPath != "" || value.IsZero() {
-				continue
+			if value.IsZero() {
+				continue // Ignore zero-value
 			}
 			set = append(set, name+" = ?")
 			vals = append(vals, value.Interface())

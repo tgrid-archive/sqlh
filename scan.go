@@ -4,8 +4,9 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
-	"strings"
 )
+
+//go:generate sh -c "./readme.awk <README > sqlh.gen.go"
 
 // Querist is the minimal set of function needed from an *sql.DB.
 type Querist interface {
@@ -106,11 +107,17 @@ func (p PendingScan) Query(db Querist) error {
 			for i, col := range columns {
 				structField, ok := t.FieldByNameFunc(func(s string) bool {
 					if field, ok := t.FieldByName(s); ok {
-						if tag, ok := field.Tag.Lookup("sql"); ok {
-							return tag == col
+						tag, ok := field.Tag.Lookup("sql")
+						if !ok {
+							return false
 						}
+						name, ignore := parseTag(tag, "select")
+						if name == col {
+							return !ignore
+						}
+						return false
 					}
-					return strings.ToLower(s) == col
+					return false
 				})
 				if !ok {
 					return fmt.Errorf("no field for column %s", col)

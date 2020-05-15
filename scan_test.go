@@ -27,15 +27,15 @@ insert into B(id, gr) values
 `
 
 type a struct {
-	A string
-	B int
-	Z string `sql:"c"`
+	A string `sql:"a/insert/update"`
+	B int    `sql:"b/insert/update"`
+	Z string `sql:"c/insert/update"`
 }
 
 var expect = []a{
-	a{"one", 1, "red"},
-	a{"two", 2, "red"},
-	a{"three", 3, "blue"},
+	{"one", 1, "red"},
+	{"two", 2, "red"},
+	{"three", 3, "blue"},
 }
 
 func TestScan(t *testing.T) {
@@ -104,7 +104,7 @@ func TestScan(t *testing.T) {
 
 	t.Run("unmatched columns cause error", func(t *testing.T) {
 		var dest struct {
-			A string
+			A string `sql:"a"`
 		}
 		test := regexp.MustCompile(`^no field for column b$`)
 		err := Scan(&dest, `select * from A`).Query(db)
@@ -127,11 +127,11 @@ func TestScan(t *testing.T) {
 
 	t.Run("embedded struct fields can be targeted", func(*testing.T) {
 		type embed struct {
-			A string
+			A string `sql:"a/update/insert"`
 		}
 		var dest struct {
 			embed
-			B int
+			B int `sql:"b/update/insert"`
 		}
 		if err := Scan(&dest, `select a, b from A limit 1`).Query(db); err != nil {
 			t.Fatal(err)
@@ -140,13 +140,13 @@ func TestScan(t *testing.T) {
 
 	t.Run("aggregate into slice fields", func(t *testing.T) {
 		type d struct {
-			A     string
-			Group []string `sql:"gr"`
+			A     string   `sql:"a/update/insert"`
+			Group []string `sql:"gr/update/insert"`
 		}
 		expect := []d{
-			d{"one", []string{"group1"}},
-			d{"two", []string{"group1", "group2"}},
-			d{"three", nil},
+			{"one", []string{"group1"}},
+			{"two", []string{"group1", "group2"}},
+			{"three", nil},
 		}
 		var dest []d
 		if err := Scan(&dest, `select a, gr from A left join B on a = id`).Query(db); err != nil {

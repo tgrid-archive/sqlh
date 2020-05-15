@@ -9,22 +9,22 @@ import (
 func TestInsert(t *testing.T) {
 
 	type e struct {
-		A int
+		A int `sql:"a"`
 	}
 
 	type row struct {
 		e
-		B string
-		y string // Should be ignored
-		Z string `sql:"-"` // Should be ignored
+		B string `sql:"b"`
+		y string `sql:"y/insert/update/select"` // Should be ignored
+		Z string `sql:"-"`                      // Should be ignored
 	}
 
 	schema := `create table X(a int, b string)`
 
 	rows := []row{
-		row{e{1}, "testing", "ignored", ""},
-		row{e{2}, "testing", "ignored", ""},
-		row{e{3}, "testing", "ignored", ""},
+		{e{1}, "testing", "ignored", ""},
+		{e{2}, "testing", "ignored", ""},
+		{e{3}, "testing", "ignored", ""},
 	}
 
 	// Build up expected statement and values for insert
@@ -108,4 +108,27 @@ func TestInsert(t *testing.T) {
 		}
 	})
 
+}
+
+func TestInsertExplicitIgnore(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`create table T(id integer primary key autoincrement, a text)`); err != nil {
+		t.Fatal(err)
+	}
+	x := struct {
+		ID int64  `sql:"id/insert"`
+		A  string `sql:"a"`
+	}{999, "999"}
+	if _, err := Insert("T", x).Exec(db); err != nil {
+		t.Fatal(err)
+	}
+	if err := Scan(&x, "select * from T").Query(db); err != nil {
+		t.Fatal(err)
+	}
+	if x.ID != 1 {
+		t.Fatalf("id should be 1, got %d", x.ID)
+	}
 }

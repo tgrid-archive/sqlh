@@ -103,3 +103,30 @@ insert into Z values(null, null, null, null, null, null),('test', 'test', 1, 1, 
 		})
 	}
 }
+
+func TestUpdateExplicitIgnore(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`create table T(id integer primary key autoincrement, a text)`); err != nil {
+		t.Fatal(err)
+	}
+	x := struct {
+		ID int64  `sql:"id/update"`
+		A  string `sql:"a"`
+	}{999, "999"}
+	if _, err := Insert("T", x).Exec(db); err != nil {
+		t.Fatal(err)
+	}
+	x.ID = 2
+	if _, err := Update("T").Set(x).Where("id = 999").Exec(db); err != nil {
+		t.Fatal(err)
+	}
+	if err := Scan(&x, "select * from T").Query(db); err != nil {
+		t.Fatal(err)
+	}
+	if x.ID != 999 {
+		t.Fatalf("id should be 999, got %d", x.ID)
+	}
+}
