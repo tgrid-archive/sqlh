@@ -33,7 +33,7 @@ We can interact with it like this:
   res, err := Insert(db, "T", row{Name:"a"})
   // INSERT INTO T(name, data) VALUES('a', NULL);
 
-   _, err := Update(db, "T", row{Data:"updated"}, "id = ?", res.LastInsertId)
+   _, err := Update(db, "T", row{Data:"updated"}, "id = $1", res.LastInsertId)
    // UPDATE T SET data = 'updated' WHERE id = 1;
 
    var dest row

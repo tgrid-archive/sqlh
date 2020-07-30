@@ -73,12 +73,12 @@ insert into Z values(null, null, null, null, null, null),('test', 'test', 1, 1, 
 	ip := 999
 	bp := false
 	tests := []test{
-		{"update w/ string", up{e: e{A: "x"}}, "a = ?", []interface{}{"x"}},
-		{"update w/ *string", up{e: e{B: &sp}}, "b = ?", []interface{}{&sp}},
-		{"update w/ int", up{C: 1}, "c = ?", []interface{}{1}},
-		{"update w/ *int", up{D: &ip}, "d = ?", []interface{}{&ip}},
-		{"update w/ bool", up{E: true}, "e = ?", []interface{}{true}},
-		{"update w/ *bool", up{F: &bp}, "f = ?", []interface{}{&bp}},
+		{"update w/ string", up{e: e{A: "x"}}, "a = $1", []interface{}{"x"}},
+		{"update w/ *string", up{e: e{B: &sp}}, "b = $1", []interface{}{&sp}},
+		{"update w/ int", up{C: 1}, "c = $1", []interface{}{1}},
+		{"update w/ *int", up{D: &ip}, "d = $1", []interface{}{&ip}},
+		{"update w/ bool", up{E: true}, "e = $1", []interface{}{true}},
+		{"update w/ *bool", up{F: &bp}, "f = $1", []interface{}{&bp}},
 	}
 
 	for i, tt := range tests {
@@ -87,13 +87,14 @@ insert into Z values(null, null, null, null, null, null),('test', 'test', 1, 1, 
 			if err != nil {
 				t.Fatal(err)
 			}
-			if tt.set != u.set {
-				t.Fatalf("test %d: expected %#v, got: %#v", i, tt.set, u.set)
+			exp := "UPDATE Z SET " + tt.set + " WHERE rowid = 1"
+			if exp != u.statement {
+				t.Fatalf("test %d:\nexp %#v\ngot %#v", i, exp, u.statement)
 			}
 			if !reflect.DeepEqual(tt.vals, u.args) {
 				t.Fatalf("test %d: expected %#v, got: %#v", i, tt.vals, u.args)
 			}
-			if res, err := db.Exec(u.statement, append(u.args, u.whereArgs...)...); err != nil {
+			if res, err := db.Exec(u.statement, u.args...); err != nil {
 				t.Fatalf("exec: %s", err)
 			} else if n, err := res.RowsAffected(); err != nil {
 				t.Fatalf("get row count: %s", err)
@@ -128,5 +129,22 @@ func TestUpdateExplicitIgnore(t *testing.T) {
 	}
 	if x.ID != 999 {
 		t.Fatalf("id should be 999, got %d", x.ID)
+	}
+}
+
+func TestUpdateStatementWithWhere(t *testing.T) {
+	type T struct {
+		A int `sql:"a"`
+	}
+	u, err := update("T", T{2}, "a = $1", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exp := preUpdate{
+		statement: `UPDATE T SET a = $2 WHERE a = $1`,
+		args:      []interface{}{1, 2},
+	}
+	if !reflect.DeepEqual(exp, *u) {
+		t.Fatalf("expected: %#v\ngot: %#v", exp, *u)
 	}
 }

@@ -27,14 +27,12 @@ func Update(db Executor, table string, value interface{}, where string, args ...
 	if err != nil {
 		return nil, err
 	}
-	return db.Exec(u.statement, append(u.args, u.whereArgs...)...)
+	return db.Exec(u.statement, u.args...)
 }
 
 type preUpdate struct {
 	statement string
 	args      []interface{}
-	whereArgs []interface{}
-	set       string
 }
 
 func update(table string, value interface{}, where string, args ...interface{}) (*preUpdate, error) {
@@ -47,6 +45,7 @@ func update(table string, value interface{}, where string, args ...interface{}) 
 
 	var recurseFields func(t reflect.Type, index []int)
 	recurseFields = func(t reflect.Type, index []int) {
+		valIndex := len(args) + 1
 		for i := 0; i < t.NumField(); i++ {
 			field := t.Field(i)
 			if field.Anonymous {
@@ -65,7 +64,8 @@ func update(table string, value interface{}, where string, args ...interface{}) 
 			if value.IsZero() {
 				continue // Ignore zero-value
 			}
-			set = append(set, name+" = ?")
+			set = append(set, name+fmt.Sprintf(" = $%d", valIndex))
+			valIndex = valIndex + 1
 			vals = append(vals, value.Interface())
 		}
 	}
@@ -80,8 +80,6 @@ func update(table string, value interface{}, where string, args ...interface{}) 
 
 	return &preUpdate{
 		statement: stmt,
-		args:      vals,
-		whereArgs: args,
-		set:       setStmt,
+		args:      append(args, vals...),
 	}, nil
 }

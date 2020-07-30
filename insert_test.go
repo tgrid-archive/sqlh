@@ -33,7 +33,7 @@ func TestInsert(t *testing.T) {
 	sep := ""
 	for i := range rows {
 		values = append(values, rows[i].A, rows[i].B)
-		statement += sep + "(?, ?)"
+		statement += sep + "($1, $2)"
 		sep = ", "
 	}
 
@@ -50,7 +50,7 @@ func TestInsert(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		statement := `insert into X(a, b) values(?, ?)`
+		statement := `insert into X(a, b) values($1, $2)`
 		if statement != x.statement {
 			t.Fatalf("expected: %#v, got: %#v", statement, x.statement)
 		}

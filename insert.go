@@ -17,7 +17,7 @@ import (
 //   values := []val{{1, "test"}, {2, "test"}}
 //
 //   res, err := Insert(db, "X", values)
-//   // = db.Exec(`insert into X(id, b) values(?, ?), (?, ?)`, 1, "test", 2, "test")
+//   // = db.Exec(`insert into X(id, b) values($1, $2), ($3, $4)`, 1, "test", 2, "test")
 func Insert(db Executor, table string, values interface{}) (sql.Result, error) {
 	i, err := insert(table, values)
 	if err != nil {
@@ -101,7 +101,7 @@ func insert(table string, values interface{}) (*preInsert, error) {
 		}
 	}
 
-	placeholders := repeat("?", ", ", len(columns))
+	placeholders := repeatWithIndex("$", ", ", len(columns))
 	value := "(" + placeholders + ")"
 	valueList := repeat(value, ", ", len(argset)/len(columns))
 	columnList := strings.Join(columns, ", ")
@@ -111,4 +111,17 @@ func insert(table string, values interface{}) (*preInsert, error) {
 		statement: statement,
 		args:      argset,
 	}, nil
+}
+
+func repeatWithIndex(prefix, separator string, n int) string {
+	if n < 0 {
+		panic("n < 0")
+	}
+	v := ""
+	ssep := ""
+	for i := 1; i <= n; i++ {
+		v += ssep + fmt.Sprintf("%v%v", prefix, i)
+		ssep = separator
+	}
+	return v
 }
