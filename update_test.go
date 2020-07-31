@@ -141,8 +141,8 @@ func TestUpdateStatementWithWhere(t *testing.T) {
 		t.Fatal(err)
 	}
 	exp := preUpdate{
-		statement: `UPDATE T SET a = $2 WHERE a = $1`,
-		args:      []interface{}{1, 2},
+		statement: `UPDATE T SET a = $1 WHERE a = $2`,
+		args:      []interface{}{2, 1},
 	}
 	if !reflect.DeepEqual(exp, *u) {
 		t.Fatalf("expected: %#v\ngot: %#v", exp, *u)
