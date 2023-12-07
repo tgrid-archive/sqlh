@@ -1,4 +1,4 @@
-module github.com/securelogicgroup/sqlh
+module github.com/tgrid-archive/sqlh
 
 go 1.13
 
